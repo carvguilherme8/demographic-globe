@@ -2,7 +2,8 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#e8e0cc">
 <title>Demographic Atlas · WPP 2024</title>
 <style>
   :root{
@@ -103,10 +104,71 @@
   .ins li{padding:7px 0;border-top:1px dotted var(--faint);font-size:14px;line-height:1.4}
   .ins li:first-child{border-top:0}
   .foot{position:fixed;left:32px;bottom:28px;font-size:11px;color:var(--muted);z-index:4;max-width:230px;line-height:1.35;font-style:italic}
+  #msel,#dfoot{display:none}
+  .bnd{position:relative;height:13px;font-size:9px;color:var(--muted);margin-top:2px}
+  .bnd span{position:absolute;transform:translateX(-50%);white-space:nowrap}
+  .chips{display:flex;gap:12px;font-size:9.5px;color:var(--muted);margin-top:2px}
+  .chip i{display:inline-block;width:10px;height:8px;border:1px solid var(--ink);margin-right:4px;vertical-align:-1px}
   @media (max-width:900px){
-    #metrics{display:none}#dock{min-width:0;width:calc(100vw - 40px);bottom:20px}
-    #panel{left:14px;right:14px;width:auto;top:auto;height:58vh;bottom:190px;transform:translateY(140%)}
-    #title{max-width:230px}#search{width:130px}.foot{display:none}
+    html,body{touch-action:manipulation}
+    #frame{inset:4px;outline:none}
+    #title{left:10px;top:calc(10px + env(safe-area-inset-top));padding:2px;max-width:calc(100vw - 20px)}
+    #title .in{padding:7px 11px 6px;display:flex;align-items:baseline;gap:10px}
+    #title h1{font-size:13px;letter-spacing:.12em;white-space:nowrap}
+    #title .sub{display:none}
+    #world{margin:0;padding:0;border:0;font-size:11px;gap:5px}
+    #world b{font-size:14px}
+    #world span{display:none}
+    #metrics,.foot{display:none}
+    #tools{left:10px;right:10px;top:calc(54px + env(safe-area-inset-top));gap:5px}
+    #search{flex:1;width:auto;min-width:0;font-size:16px;padding:5px 10px}
+    .tbtn{padding:5px 11px;font-size:13px}
+    #dock{left:10px;right:10px;bottom:calc(10px + env(safe-area-inset-bottom));transform:none;width:auto;min-width:0;padding:2px}
+    #dock .in{padding:7px 10px 6px}
+    #msel{display:block;width:100%;margin:0 0 6px;padding:6px 8px;font:inherit;font-size:16px;border:1px solid var(--ink);border-radius:0;background:var(--paper2);color:var(--ink);-webkit-appearance:none;appearance:none;
+      background-image:linear-gradient(45deg,transparent 50%,var(--ink) 50%),linear-gradient(135deg,var(--ink) 50%,transparent 50%);background-position:calc(100% - 17px) 55%,calc(100% - 12px) 55%;background-size:5px 5px,5px 5px;background-repeat:no-repeat}
+    #legendttl{margin-bottom:4px}
+    #legendttl b{display:none}
+    #legendttl i{font-size:11.5px;margin-left:auto}
+    #legend{display:block}
+    #legend .row{display:flex}
+    #timeline{margin-top:6px;padding-top:6px;gap:9px}
+    #yearbox{min-width:70px}
+    #year{font-size:21px}
+    #phase{font-size:9.5px}
+    #play{width:38px;height:38px}
+    #tl{padding-bottom:13px;margin:0 12px 0 10px}
+    #slider{height:30px}
+    #slider::-webkit-slider-thumb{width:24px;height:24px}
+    #slider::-moz-range-thumb{width:20px;height:20px}
+    #tlab span:nth-child(even){display:none}
+    #dfoot{display:block;font-size:8.5px;color:var(--muted);font-style:italic;margin-top:3px;line-height:1.25}
+    /* ficha do pa\u00eds vira folha inferior; o dock some enquanto ela est\u00e1 aberta */
+    #panel{left:8px;right:8px;width:auto;top:auto;bottom:calc(8px + env(safe-area-inset-bottom));height:58vh;height:58dvh;max-height:520px;transform:translateY(calc(100% + 24px))}
+    #panel.open{transform:none}
+    body.pan #dock{display:none}
+    #pscroll{padding:12px 14px 16px}
+    .cname{font-size:22px}
+    .csub{font-size:12px}
+    .gz .r{font-size:13.5px}
+    h3{margin-top:16px}
+  }
+  @media (max-width:900px) and (orientation:landscape){
+    #title .in{padding:5px 10px 4px}
+    #tools{left:auto;right:10px;top:calc(10px + env(safe-area-inset-top))}
+    #search{flex:none;width:150px}
+    body.pan #tools{display:none}
+    #panel{left:auto;right:8px;top:8px;bottom:8px;width:min(340px,46vw);height:auto;max-height:none;transform:translateX(calc(100% + 24px))}
+    #panel.open{transform:none}
+    body.pan #dock{display:block;left:10px;right:calc(min(340px,46vw) + 16px);width:auto}
+    #dock .in{display:grid;grid-template-columns:minmax(120px,200px) 1fr;column-gap:12px;align-items:center;padding:5px 10px 4px}
+    #msel{grid-column:1;margin:0;padding:4px 8px}
+    #legendttl{display:none}
+    #legend{grid-column:2}
+    #timeline{grid-column:1 / -1;margin-top:3px;padding-top:4px}
+    #slider{height:22px}
+    #dfoot{display:none}
+    #legend .chips{display:none}
   }
 </style>
 </head>
@@ -126,6 +188,7 @@
 </div>
 
 <div id="dock" class="box"><div class="in">
+  <select id="msel" aria-label="Layer"></select>
   <div id="legendttl"><b id="lname"></b><i id="lunit"></i></div>
   <div id="legend"></div>
   <div id="timeline">
@@ -133,6 +196,7 @@
     <div id="yearbox"><div id="year">2024</div><div id="phase"></div></div>
     <div id="tl"><input id="slider" type="range" min="1950" max="2100" step="1" value="2024"><div id="tlab"></div></div>
   </div>
+  <div id="dfoot"></div>
 </div></div>
 
 <div id="panel" class="box"><div id="pin"><button id="close">×</button><div id="pscroll"></div></div></div>
@@ -297,15 +361,35 @@ const globe = Globe({animateIn:true})(el)
 (function fixOcean(n){ const gm = globe.globeMaterial(); if (gm.map){ gm.emissive.setHex(0xffffff); gm.emissiveMap = gm.map; gm.emissiveIntensity = 0.4; gm.shininess = 0; gm.needsUpdate = true; } else if (n<60) setTimeout(()=>fixOcean(n+1), 100); })(0);
 try { globe.lights().forEach(l=>{ if (l.isAmbientLight) l.intensity = 2.6; if (l.isDirectionalLight) l.intensity = 0.45; }); } catch(e){}
 const controls = globe.controls();
-controls.autoRotate = true; controls.autoRotateSpeed = 0.45; controls.enableDamping = true; controls.minDistance = 130; controls.maxDistance = 520;
-globe.pointOfView({lat:-8, lng:-50, altitude:2.0}, 0);
-// desloca o globo ~6% da altura da tela para cima, liberando espaço para o quadro da legenda embaixo
-function sizeGlobe(){
+controls.autoRotate = true; controls.autoRotateSpeed = 0.45; controls.enableDamping = true; controls.minDistance = 130; controls.maxDistance = 760;
+const MOBILE = window.matchMedia('(max-width: 900px)');
+const LANDSCAPE = window.matchMedia('(orientation: landscape)');
+const rectOf = id => document.getElementById(id).getBoundingClientRect();
+// area livre para o globo: desktop desloca ~6% para cima; no celular fica entre os controles do topo e o dock/folha de baixo
+function freeArea(){
   const W = window.innerWidth, H = window.innerHeight;
-  globe.width(W).height(H);
-  globe.camera().setViewOffset(W, H, 0, Math.round(H*0.06), W, H); globe.camera().updateProjectionMatrix();
+  if (!MOBILE.matches) return {W, H, top: 0, bottom: H, left: 0, right: W, dx: 0, dy: Math.round(H*0.06)};
+  const pan = document.body.classList.contains('pan');
+  let top = Math.max(rectOf('tools').bottom, rectOf('title').bottom) + 6, bottom = H - 6, left = 0, right = W;
+  if (pan && !LANDSCAPE.matches) bottom = H - document.getElementById('panel').offsetHeight - 14;
+  else if (document.getElementById('dock').offsetHeight) bottom = rectOf('dock').top - 6;
+  if (pan && LANDSCAPE.matches){ right = W - Math.min(340, W*0.46) - 16; top = 8; }
+  return {W, H, top, bottom, left, right, dx: Math.round(W/2 - (left+right)/2), dy: Math.round(H/2 - (top+bottom)/2)};
 }
-window.addEventListener('resize', sizeGlobe); sizeGlobe();
+// altitude da camera para o globo caber na area livre (desktop: 2.0)
+function fitAlt(){
+  const a = freeArea(), d = Math.min(a.right - a.left, a.bottom - a.top) * 0.94, ratio = Math.min(d / a.H, 0.758);
+  const th = Math.atan(ratio * Math.tan(25 * Math.PI/180));
+  return Math.max(2.0 * (MOBILE.matches ? 0.55 : 1), 1/Math.sin(th) - 1);
+}
+function sizeGlobe(){
+  const a = freeArea();
+  globe.width(a.W).height(a.H);
+  globe.camera().setViewOffset(a.W, a.H, a.dx, a.dy, a.W, a.H); globe.camera().updateProjectionMatrix();
+}
+window.addEventListener('resize', ()=>{ sizeGlobe(); });
+window.addEventListener('orientationchange', ()=> setTimeout(()=>{ buildLegend(); sizeGlobe(); globe.pointOfView({altitude: fitAlt()}, 400); }, 250));
+MOBILE.addEventListener('change', ()=>{ buildLegend(); sizeGlobe(); });
 controls.addEventListener('start', ()=>{ if (spinning) setSpin(false); });
 
 function selectedFeat(){ return selected ? GEO.features.find(f=>featIso(f)===selected) : null; }
@@ -333,6 +417,9 @@ function buildMetrics(){
     const b = document.createElement('button'); b.className = 'mbtn'+(k===metric?' on':'');
     b.innerHTML = `<s>${i+1}</s>${T().m[k]}`; b.onclick = ()=>setMetric(k); box.appendChild(b);
   });
+  const sel = document.getElementById('msel');
+  sel.innerHTML = ORDER.map(k=>`<option value="${k}"${k===metric?' selected':''}>${T().m[k]}</option>`).join('');
+  sel.onchange = e => setMetric(e.target.value);
 }
 function setMetric(k){
   metric = k; buildMetrics(); buildLegend(); document.getElementById('slider').disabled = !!METRICS[k].static;
@@ -341,7 +428,14 @@ function setMetric(k){
 function buildLegend(){
   const m = METRICS[metric], n = m.col.length;
   document.getElementById('lname').textContent = T().m[metric]; document.getElementById('lunit').textContent = T().mu[metric];
-  const lab = i => i===0 ? '< '+m.ef(m.br[0]) : (i===n-1 && metric==='pk') ? m.br[n-2]+'–2099' : i===n-1 ? '≥ '+m.ef(m.br[n-2]) : m.ef(m.br[i-1])+'–'+m.ef(m.br[i]);
+  if (MOBILE.matches){
+    const sw = m.col.map(c=>`<div class="cls"><div class="sw" style="background:${c}"></div></div>`).join('');
+    const bl = m.br.map((b,i)=>`<span style="left:${(i+1)/n*100}%">${m.ef(b)}</span>`).join('');
+    const chips = (m.still ? `<span class="chip"><i style="background:${m.still}"></i>${T().stillGrowing}</span>` : '') + `<span class="chip"><i style="background:${NODATA}"></i>${T().nodata}</span>`;
+    document.getElementById('legend').innerHTML = `<div class="row">${sw}</div><div class="bnd">${bl}</div><div class="chips">${chips}</div>`;
+    return;
+  }
+  const lab = i => i===0 ? '< '+m.ef(m.br[0]) : (i===n-1 && metric==='pk') ? m.br[n-2]+'\u20132099' : i===n-1 ? '\u2265 '+m.ef(m.br[n-2]) : m.ef(m.br[i-1])+'\u2013'+m.ef(m.br[i]);
   let h = m.col.map((c,i)=>`<div class="cls"><div class="sw" style="background:${c}"></div><div class="lb">${lab(i)}</div></div>`).join('');
   if (m.still) h += `<div class="cls" style="flex:1.5"><div class="sw" style="background:${m.still};margin-left:6px;border-left-width:1px"></div><div class="lb" style="margin-left:6px">${T().stillGrowing}</div></div>`;
   h += `<div class="cls" style="flex:1.1"><div class="sw" style="background:${NODATA};margin-left:8px;border-left-width:1px"></div><div class="lb" style="margin-left:8px">${T().nodata}</div></div>`;
@@ -377,7 +471,7 @@ function applyLang(){
   document.documentElement.lang = lang==='pt'?'pt-BR':'en';
   document.getElementById('lang').textContent = lang==='pt'?'EN':'PT';
   document.getElementById('t-title').textContent = T().title; document.getElementById('t-sub').textContent = T().sub;
-  document.getElementById('search').placeholder = T().search; document.getElementById('foot').textContent = T().foot;
+  document.getElementById('search').placeholder = T().search; document.getElementById('foot').textContent = T().foot; document.getElementById('dfoot').textContent = T().foot;
   const dl = document.getElementById('clist'); dl.innerHTML = '';
   isos.map(i=>[nameOf(i),i]).sort((a,b)=>a[0].localeCompare(b[0])).forEach(([n])=>{ const o=document.createElement('option'); o.value=n; dl.appendChild(o); });
   globe.labelsData(labelData());
@@ -391,10 +485,10 @@ document.getElementById('search').addEventListener('change', e=>{
 /* ================= seleção e ficha do país ================= */
 function select(iso, fly){
   selected = iso; setSpin(false); refresh(true); renderPanel();
-  document.getElementById('panel').classList.add('open'); document.body.classList.add('pan');
-  if (fly){ const f = selectedFeat(); if (f) globe.pointOfView({lat:f.properties.c[1], lng:f.properties.c[0], altitude:f.properties.alt}, 1100); }
+  document.getElementById('panel').classList.add('open'); document.body.classList.add('pan'); sizeGlobe();
+  if (fly){ const f = selectedFeat(); if (f) globe.pointOfView({lat:f.properties.c[1], lng:f.properties.c[0], altitude:f.properties.alt * (MOBILE.matches ? 1.5 : 1)}, 1100); }
 }
-function deselect(){ selected = null; document.getElementById('panel').classList.remove('open'); document.body.classList.remove('pan'); refresh(true); }
+function deselect(){ selected = null; document.getElementById('panel').classList.remove('open'); document.body.classList.remove('pan'); sizeGlobe(); refresh(true); }
 document.getElementById('close').onclick = deselect;
 document.addEventListener('keydown', e=>{ if (e.key==='Escape') deselect(); });
 
@@ -462,6 +556,8 @@ function renderPanel(){
 
 /* ================= início ================= */
 applyLang();
+sizeGlobe();
+globe.pointOfView({lat:-8, lng:-50, altitude:fitAlt()}, 0);
 </script>
 </body>
 </html>
