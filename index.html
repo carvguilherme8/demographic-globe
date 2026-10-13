@@ -76,8 +76,11 @@
   .scene-tooltip{z-index:30 !important}
   .tip{padding:6px 10px;background:var(--paper2);border:1px solid var(--ink);font:13px var(--serif);color:var(--ink);box-shadow:2px 2px 0 rgba(42,39,34,.2)}
   .tip b{font-size:14px}.tip .v{font-weight:700;color:var(--ox)}.tip .m{color:var(--muted);font-style:italic}
-  .clab{pointer-events:none;white-space:nowrap;font:700 10px "Palatino Linotype",Palatino,"Book Antiqua",Georgia,serif;letter-spacing:.1em;text-transform:uppercase;color:#1f1c17;
-    text-shadow:0 0 2px #f4eee0,0 0 2px #f4eee0,0 0 4px #f4eee0,0 0 6px rgba(244,238,224,.9);transition:opacity .15s}
+  .clab{position:absolute;left:0;top:0;pointer-events:none;white-space:nowrap;font:700 10px "Palatino Linotype",Palatino,"Book Antiqua",Georgia,serif;letter-spacing:.1em;text-transform:uppercase;color:#1f1c17;
+    text-shadow:0 0 2px #f4eee0,0 0 2px #f4eee0,0 0 4px #f4eee0,0 0 6px rgba(244,238,224,.9);will-change:transform}
+  .clab.off{visibility:hidden}
+  #lbls{position:absolute;inset:0;overflow:hidden;pointer-events:none;z-index:2}
+  #tipbox{position:fixed;left:0;top:0;z-index:30;pointer-events:none;display:none}
   .tip i.sq{display:inline-block;width:10px;height:10px;border:1px solid var(--ink);margin-right:5px;vertical-align:-1px}
 
   /* ---- gazetteer panel ---- */
@@ -334,39 +337,85 @@ function featColor(f){
 }
 
 /* ================= textura do oceano com graticule ================= */
-function makeOcean(){
-  const W = 4096, H = 2048, c = document.createElement('canvas'); c.width = W; c.height = H;
+function makeOceanCanvas(W, H){
+  const c = document.createElement('canvas'); c.width = W; c.height = H;
   const g = c.getContext('2d');
   g.fillStyle = '#d3e0e6'; g.fillRect(0, 0, W, H);
-  const line = (x0,y0,x1,y1,w,a)=>{ g.strokeStyle = `rgba(52,86,106,${a})`; g.lineWidth = w; g.beginPath(); g.moveTo(x0,y0); g.lineTo(x1,y1); g.stroke(); };
+  const k = W/4096;
+  const line = (x0,y0,x1,y1,w,a)=>{ g.strokeStyle = `rgba(52,86,106,${a})`; g.lineWidth = w*k; g.beginPath(); g.moveTo(x0,y0); g.lineTo(x1,y1); g.stroke(); };
   for (let lon=-180; lon<=180; lon+=10){ const x=(lon+180)/360*W; line(x,0,x,H, lon%30===0?2.2:1.1, lon%30===0?.5:.26); }
   for (let lat=-90; lat<=90; lat+=10){ const y=(90-lat)/180*H; line(0,y,W,y, lat===0?2.2:(lat%30===0?2:1.1), lat===0?.55:(lat%30===0?.45:.26)); }
-  return c.toDataURL('image/png');
+  return c;
 }
+const WEAK = (navigator.hardwareConcurrency || 8) <= 4 || (navigator.deviceMemory || 8) <= 4 || /Android|iPhone|iPad|Mobi/i.test(navigator.userAgent);
 
 /* ================= globo ================= */
 const el = document.getElementById('globe');
-const globe = Globe({animateIn:true})(el)
-  .globeImageUrl(makeOcean())
+const ph = document.createElement('canvas'); ph.width = 4; ph.height = 2; ph.getContext('2d').fillStyle = '#d3e0e6'; ph.getContext('2d').fillRect(0,0,4,2);
+const globe = Globe({animateIn:false, rendererConfig:{antialias: !WEAK, alpha:true, powerPreference:'high-performance'}})(el)
+  .globeImageUrl(ph.toDataURL())
   .backgroundColor('#e8e0cc')
   .showAtmosphere(false)
-  .polygonsData(GEO.features)
+  .polygonsData([])                       // só o país selecionado / sob o mouse viram malha 3D; o resto é textura
   .polygonCapColor(featColor)
   .polygonSideColor(()=> 'rgba(70,62,48,.45)')
   .polygonStrokeColor(()=> '#4a4436')
-  .polygonAltitude(0.004)
-  .polygonsTransitionDuration(240)
-  .polygonLabel(f => tooltip(f))
-  .onPolygonHover(f => { hover = f; el.style.cursor = (f && DATA[featIso(f)]) ? 'pointer' : 'grab'; refresh(false); })
-  .onPolygonClick(f => { if (f && DATA[featIso(f)]) select(featIso(f), true); })
-  .onGlobeClick(() => deselect())
-  .htmlElementsData([]).htmlLat('lat').htmlLng('lng').htmlAltitude(0.012).htmlTransitionDuration(0)
-  .htmlElement(d => { const e = document.createElement('div'); e.className = 'clab'; e.textContent = d.name[lang].toUpperCase();
-    e.style.fontSize = (9 + Math.min(d.sp, 45)/45*3.5).toFixed(1) + 'px'; d.el = e; return e; });
-globe.renderer().setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));   // limita o custo em telas de alta densidade
+  .polygonAltitude(0.022)
+  .polygonsTransitionDuration(150);
+globe.enablePointerInteraction(false);   // sem raycast por país: hover e clique são calculados abaixo (1 raio na esfera + ponto-em-polígono)
+globe.renderer().setPixelRatio(WEAK ? 1 : Math.min(window.devicePixelRatio || 1, 1.5));
 
-// o oceano usa a textura também como emissão: cor fiel ao papel, sem sombreado de "bola 3D"
-(function fixOcean(n){ const gm = globe.globeMaterial(); if (gm.map){ gm.emissive.setHex(0xffffff); gm.emissiveMap = gm.map; gm.emissiveIntensity = 0.4; gm.shininess = 0; gm.needsUpdate = true; wake(); } else if (n<60) setTimeout(()=>fixOcean(n+1), 100); })(0);
+/* ================= terra: todos os países pintados numa única textura ================= */
+const LW = (WEAK || globe.renderer().capabilities.maxTextureSize < 4096) ? 2048 : 4096, LH = LW/2;
+const baseC = makeOceanCanvas(LW, LH);
+const landC = document.createElement('canvas'); landC.width = LW; landC.height = LH;
+const lg = landC.getContext('2d');
+const gx = lon => (lon+180)/360*LW, gy = lat => (90-lat)/180*LH;
+const allStroke = new Path2D();
+const FEAT = GEO.features.map(f => {
+  const polys = f.geometry.type === 'Polygon' ? [f.geometry.coordinates] : f.geometry.coordinates;
+  const fill = new Path2D(), stroke = new Path2D(), parts = [];
+  polys.forEach(poly => {
+    poly.forEach(ring => {
+      let pen = false;
+      ring.forEach((q, i) => {
+        const x = gx(q[0]), y = gy(q[1]);
+        if (i === 0) fill.moveTo(x, y); else fill.lineTo(x, y);
+        const edge = i > 0 && Math.abs(q[0]) >= 179.99 && Math.abs(ring[i-1][0]) >= 179.99 && Math.sign(q[0]) === Math.sign(ring[i-1][0]);   // corte no antimeridiano: sem linha
+        if (!pen || edge) stroke.moveTo(x, y); else stroke.lineTo(x, y);
+        pen = true;
+      });
+      fill.closePath();
+    });
+    const o = poly[0]; let x0=999, y0=999, x1=-999, y1=-999;
+    o.forEach(q => { if (q[0]<x0) x0=q[0]; if (q[0]>x1) x1=q[0]; if (q[1]<y0) y0=q[1]; if (q[1]>y1) y1=q[1]; });
+    parts.push({bb:[x0,y0,x1,y1], rings:poly});
+  });
+  allStroke.addPath(stroke);
+  return {f, fill, stroke, parts};
+});
+let landTex = null, landQ = false;
+function redrawLand(){
+  lg.drawImage(baseC, 0, 0);
+  for (const e of FEAT){ lg.fillStyle = featColor(e.f); lg.fill(e.fill, 'evenodd'); }
+  lg.lineJoin = 'round'; lg.lineCap = 'round';
+  lg.strokeStyle = '#4a4436'; lg.lineWidth = LW/4096*1.7; lg.stroke(allStroke);
+  if (selected){ const e = FEAT.find(q => featIso(q.f) === selected); if (e){ lg.strokeStyle = '#14120e'; lg.lineWidth = LW/4096*3; lg.stroke(e.stroke); } }
+  if (landTex){ landTex.needsUpdate = true; wake(); }
+}
+function scheduleLand(){ if (landQ) return; landQ = true; requestAnimationFrame(()=>{ landQ = false; redrawLand(); }); }
+// troca a textura placeholder pela do mapa (também usada como emissão: cor fiel ao papel, sem sombreado de "bola 3D")
+(function initLand(n){
+  const gm = globe.globeMaterial();
+  if (gm.map){
+    const old = gm.map, t = new old.constructor(landC);
+    if ('colorSpace' in old) t.colorSpace = old.colorSpace;
+    if ('encoding' in old) t.encoding = old.encoding;
+    t.anisotropy = Math.min(WEAK ? 2 : 8, globe.renderer().capabilities.getMaxAnisotropy());
+    gm.map = t; gm.emissive.setHex(0xffffff); gm.emissiveMap = t; gm.emissiveIntensity = 0.4; gm.shininess = 0; gm.needsUpdate = true;
+    landTex = t; old.dispose(); redrawLand();
+  } else if (n < 80) setTimeout(()=>initLand(n+1), 100);
+})(0);
 try { globe.lights().forEach(l=>{ if (l.isAmbientLight) l.intensity = 2.6; if (l.isDirectionalLight) l.intensity = 0.45; }); } catch(e){}
 const controls = globe.controls();
 controls.autoRotate = true; controls.autoRotateSpeed = 0.45; controls.enableDamping = true; controls.minDistance = 130; controls.maxDistance = 760;
@@ -393,54 +442,138 @@ function fitAlt(){
 function sizeGlobe(){
   const a = freeArea();
   globe.width(a.W).height(a.H);
-  globe.camera().setViewOffset(a.W, a.H, a.dx, a.dy, a.W, a.H); globe.camera().updateProjectionMatrix();
+  globe.camera().setViewOffset(a.W, a.H, a.dx, a.dy, a.W, a.H); globe.camera().updateProjectionMatrix(); lastArea = a; if (typeof scheduleLabels === 'function') scheduleLabels();
 }
 window.addEventListener('resize', ()=>{ sizeGlobe(); });
-window.addEventListener('orientationchange', ()=> setTimeout(()=>{ buildLegend(); sizeGlobe(); globe.pointOfView({altitude: fitAlt()}, 400); }, 250));
+window.addEventListener('orientationchange', ()=> setTimeout(()=>{ buildLegend(); sizeGlobe(); globe.pointOfView({altitude: fitAlt()}, 400); wake(1500); }, 250));
 MOBILE.addEventListener('change', ()=>{ buildLegend(); sizeGlobe(); });
 /* ---------- desempenho ---------- */
-// 1) o loop de render pausa quando nada muda (sem giro, sem play, sem interação)
-let idleT = null, asleep = false, dragging = false, ptrOff = false;
+// o loop de render pausa quando nada muda (sem giro, sem play, sem interação)
+let idleT = null, asleep = false, dragging = false, lastArea = null;
 function wake(ms = 2500){
   if (asleep){ asleep = false; globe.resumeAnimation(); }   // flag evita recursão: resumeAnimation dispara o evento 'change' dos controles
   clearTimeout(idleT);
   idleT = setTimeout(()=>{ if (!spinning && !playing && !dragging){ asleep = true; globe.pauseAnimation(); } }, ms);
 }
 ['pointermove','pointerdown','wheel','touchstart','keydown'].forEach(ev => window.addEventListener(ev, ()=>wake(), {passive:true}));
-// 2) durante o arraste o picking (raycast em todos os países) é desligado; clique sem arrastar continua funcionando
 controls.addEventListener('start', ()=>{ if (spinning) setSpin(false); wake(); });
-el.addEventListener('pointerdown', ()=>{ dragging = true; });
-const dragEnd = ()=>{ dragging = false; setTimeout(()=>{ if (ptrOff){ ptrOff = false; globe.enablePointerInteraction(true); el.style.cursor = 'grab'; } }, 80); };
-window.addEventListener('pointerup', dragEnd); window.addEventListener('pointercancel', dragEnd);
-controls.addEventListener('change', ()=>{ if (dragging && !ptrOff){ ptrOff = true; hover = null; globe.enablePointerInteraction(false); el.style.cursor = 'grabbing'; } updateLabels(false); occlude(); wake(); });
+controls.addEventListener('change', ()=> wake());
+globe.onZoom(()=>{ scheduleLabels(); wake(); });
 
-/* ---------- rótulos dos países (HTML, por nível de zoom, escondidos no lado oculto) ---------- */
-const LVL_SP = [26, 13, 6, 2.2];          // tamanho mínimo (graus) do país por nível de zoom
-let curLvl = -1, lblItems = [];
-function lblLevel(alt){ return alt > 2.6 ? 0 : alt > 1.7 ? 1 : alt > 1.1 ? 2 : 3; }
-function updateLabels(force){
-  const lv = lblLevel(globe.pointOfView().altitude);
-  if (lv === curLvl && !force) return;
-  curLvl = lv;
-  lblItems = GEO.features.filter(f => DATA[featIso(f)] && f.properties.sp >= LVL_SP[lv]).map(f => {
-    const la = f.properties.c[1], lo = f.properties.c[0], ph = (90-la)*Math.PI/180, th = (90-lo)*Math.PI/180;
-    return {lat:la, lng:lo, name:f.properties.name, sp:f.properties.sp, v:[Math.sin(ph)*Math.cos(th), Math.cos(ph), Math.sin(ph)*Math.sin(th)]};
-  });
-  globe.htmlElementsData(lblItems); wake();
-  setTimeout(occlude, 60); setTimeout(occlude, 300);
+/* ---------- hover, clique e tooltip próprios ---------- */
+const tipEl = document.createElement('div'); tipEl.id = 'tipbox'; document.body.appendChild(tipEl);
+let lastPt = null, pickQ = false, downPt = null;
+function inRing(r, x, y){ let c = false; for (let i=0, j=r.length-1; i<r.length; j=i++){ const a = r[i], b = r[j]; if ((a[1]>y) !== (b[1]>y) && x < (b[0]-a[0])*(y-a[1])/(b[1]-a[1]) + a[0]) c = !c; } return c; }
+function pickFeat(lat, lng){
+  for (const e of FEAT) for (const P of e.parts){
+    const b = P.bb; if (lng<b[0] || lng>b[2] || lat<b[1] || lat>b[3] || !inRing(P.rings[0], lng, lat)) continue;
+    let hole = false; for (let k=1; k<P.rings.length; k++) if (inRing(P.rings[k], lng, lat)){ hole = true; break; }
+    if (!hole) return e.f;
+  }
+  return null;
 }
-function occlude(){
-  const p = globe.camera().position, n = Math.hypot(p.x, p.y, p.z);
-  lblItems.forEach(d => { if (d.el) d.el.style.opacity = (d.v[0]*p.x + d.v[1]*p.y + d.v[2]*p.z)/n > 0.2 ? 1 : 0; });
+// raio da câmera até a esfera (raio 100): devolve lat/lng do ponto sob o cursor, ou null se estiver no espaço
+function coordsAt(x, y){
+  const cam = globe.camera(), V = cam.position.constructor, o = cam.position;
+  const q = new V(2*x/window.innerWidth - 1, 1 - 2*y/window.innerHeight, 0.5).unproject(cam);
+  const dx = q.x-o.x, dy = q.y-o.y, dz = q.z-o.z, L = Math.hypot(dx, dy, dz), ux = dx/L, uy = dy/L, uz = dz/L;
+  const b = o.x*ux + o.y*uy + o.z*uz, c = o.x*o.x + o.y*o.y + o.z*o.z - 10000, disc = b*b - c;
+  if (disc < 0) return null;
+  const t = -b - Math.sqrt(disc), px = o.x + t*ux, py = o.y + t*uy, pz = o.z + t*uz;
+  let lng = 90 - Math.atan2(pz, px)*180/Math.PI; lng = ((lng + 540) % 360) - 180;
+  return {lat: Math.asin(Math.max(-1, Math.min(1, py/100)))*180/Math.PI, lng};
+}
+function featAt(x, y){ const c = coordsAt(x, y); return c ? pickFeat(c.lat, c.lng) : null; }
+function moveTip(){
+  if (!lastPt || !hover) return;
+  const r = tipEl.getBoundingClientRect(); let x = lastPt.x + 16, y = lastPt.y + 18;
+  if (x + r.width > innerWidth - 8) x = lastPt.x - r.width - 12;
+  if (y + r.height > innerHeight - 8) y = lastPt.y - r.height - 12;
+  tipEl.style.transform = `translate(${x}px,${y}px)`;
+}
+function setHover(f){
+  if (f === hover) return;
+  hover = f; el.style.cursor = (f && DATA[featIso(f)]) ? 'pointer' : 'grab';
+  if (f){ tipEl.innerHTML = tooltip(f); tipEl.style.display = 'block'; } else tipEl.style.display = 'none';
+  refresh(false);
+}
+el.addEventListener('pointermove', e => {
+  lastPt = {x:e.clientX, y:e.clientY};
+  if (dragging || e.pointerType === 'touch' || pickQ) return;
+  pickQ = true;
+  requestAnimationFrame(()=>{ pickQ = false; if (dragging || !lastPt) return; setHover(featAt(lastPt.x, lastPt.y)); moveTip(); });
+});
+el.addEventListener('pointerleave', ()=> setHover(null));
+el.addEventListener('pointerdown', e => { dragging = true; downPt = e.isPrimary ? {x:e.clientX, y:e.clientY, t:performance.now()} : null; setHover(null); }, true);
+window.addEventListener('pointerup', e => {
+  const d = downPt; downPt = null; dragging = false;
+  if (!d || !e.isPrimary || Math.hypot(e.clientX-d.x, e.clientY-d.y) > 6 || performance.now()-d.t > 700) return;
+  const f = featAt(e.clientX, e.clientY);
+  if (f && DATA[featIso(f)]) select(featIso(f), true); else if (selected) deselect();
+});
+window.addEventListener('pointercancel', ()=>{ dragging = false; downPt = null; });
+
+/* ---------- rótulos: camada própria, por tamanho do país na tela + sem sobreposição ---------- */
+const lblLayer = document.createElement('div'); lblLayer.id = 'lbls'; el.appendChild(lblLayer);
+const LAB = GEO.features.filter(f => DATA[featIso(f)] && f.properties.sp >= 0.6).sort((a,b) => b.properties.sp - a.properties.sp).map(f => {
+  const la = f.properties.c[1], lo = f.properties.c[0], ph_ = (90-la)*Math.PI/180, th = (90-lo)*Math.PI/180;
+  const e = document.createElement('div'); e.className = 'clab off'; lblLayer.appendChild(e);
+  return {f, el:e, lat:la, lng:lo, sp:f.properties.sp, w:60, h:12, on:false, tx:'', v:[Math.sin(ph_)*Math.cos(th), Math.cos(ph_), Math.sin(ph_)*Math.sin(th)]};
+});
+function updateLabels(force){
+  if (force){
+    const mob = MOBILE.matches;
+    LAB.forEach(L => { L.el.textContent = L.f.properties.name[lang].toUpperCase(); L.el.style.fontSize = ((mob ? 8 : 9) + Math.min(L.sp, 45)/45*(mob ? 2.5 : 3.5)).toFixed(1) + 'px'; });
+    LAB.forEach(L => { L.w = L.el.offsetWidth; L.h = L.el.offsetHeight; });
+  }
+  scheduleLabels();
+}
+let lblQ = false;
+function scheduleLabels(){ if (lblQ) return; lblQ = true; requestAnimationFrame(layoutLabels); }
+function layoutLabels(){
+  lblQ = false;
+  const cam = globe.camera(), p = cam.position, n = Math.hypot(p.x, p.y, p.z), mob = MOBILE.matches;
+  const a = lastArea || freeArea(), W = window.innerWidth;
+  const pxDeg = (window.innerHeight/2) / Math.tan(cam.fov*Math.PI/360) * (100*Math.PI/180) / Math.max(n-100, 1);   // pixels por grau no centro do globo
+  const minSpan = mob ? 34 : 24, ratio = mob ? 1.25 : 0.45, maxN = mob ? 14 : 70;
+  const placed = []; let count = 0, i = 0;
+  for (; i < LAB.length; i++){
+    const L = LAB[i];
+    if (L.sp*pxDeg < minSpan) break;                  // ordenados por tamanho: o resto é menor ainda
+    let ok = false, x = 0, y = 0;
+    if (count < maxN && L.sp*pxDeg >= ratio*L.w && (L.v[0]*p.x + L.v[1]*p.y + L.v[2]*p.z)/n > 0.28){
+      const sc = globe.getScreenCoords(L.lat, L.lng, 0.012);
+      if (sc){
+        x = sc.x; y = sc.y;
+        const hw = L.w/2 + 3, hh = L.h/2 + 1;
+        if (x-hw >= 2 && x+hw <= W-2 && y-hh >= a.top && y+hh <= a.bottom){
+          ok = true;
+          for (const r of placed) if (x-hw < r[2] && x+hw > r[0] && y-hh < r[3] && y+hh > r[1]){ ok = false; break; }
+          if (ok){ placed.push([x-hw, y-hh, x+hw, y+hh]); count++; }
+        }
+      }
+    }
+    if (ok){
+      const tx = `translate3d(${x.toFixed(0)}px,${y.toFixed(0)}px,0) translate(-50%,-50%)`;
+      if (tx !== L.tx){ L.el.style.transform = tx; L.tx = tx; }
+      if (!L.on){ L.el.classList.remove('off'); L.on = true; }
+    } else if (L.on){ L.el.classList.add('off'); L.on = false; }
+  }
+  for (; i < LAB.length; i++) if (LAB[i].on){ LAB[i].el.classList.add('off'); LAB[i].on = false; }
 }
 
 function selectedFeat(){ return selected ? GEO.features.find(f=>featIso(f)===selected) : null; }
 function refresh(colors=true){
   wake();
   const sel = selectedFeat();
-  if (colors) globe.polygonCapColor(featColor);
-  globe.polygonStrokeColor(f => f===sel ? '#14120e' : '#4a4436')
-       .polygonAltitude(f => f===sel ? 0.06 : (f===hover && DATA[featIso(f)] ? 0.022 : 0.004));
+  if (colors) scheduleLand();
+  const list = []; if (sel) list.push(sel); if (hover && hover !== sel && DATA[featIso(hover)]) list.push(hover);
+  const key = list.map(featIso).join(',') + '|' + (sel ? selected : '');
+  if (colors || key !== refresh.key){
+    refresh.key = key;
+    globe.polygonsData(list).polygonCapColor(featColor).polygonStrokeColor(f => f===sel ? '#14120e' : '#4a4436').polygonAltitude(f => f===sel ? 0.06 : 0.022);
+  }
+  if (colors && hover) tipEl.innerHTML = tooltip(hover);
 }
 
 function tooltip(f){
@@ -501,7 +634,7 @@ document.getElementById('play').onclick = ()=>{
   if (playing){ stopPlay(); return; }
   playing = true; document.getElementById('playicon').innerHTML='<path d="M2.5 1.5h3v11h-3zM8.5 1.5h3v11h-3z"/>';
   if (year>=Y1) setYear(Y0);
-  timer = setInterval(()=>{ if (year>=Y1){ stopPlay(); return; } setYear(year+1); }, 110);
+  timer = setInterval(()=>{ if (year>=Y1){ stopPlay(); return; } setYear(year+1); }, WEAK ? 160 : 120);
 };
 function updateWorld(){
   let tot = 0; isos.forEach(i=>{ const v = DATA[i].p[year-Y0]; if (v!=null) tot += v; });
@@ -530,7 +663,7 @@ document.getElementById('search').addEventListener('change', e=>{
 function select(iso, fly){
   selected = iso; setSpin(false); refresh(true); renderPanel();
   document.getElementById('panel').classList.add('open'); document.body.classList.add('pan'); sizeGlobe();
-  if (fly){ const f = selectedFeat(); if (f) globe.pointOfView({lat:f.properties.c[1], lng:f.properties.c[0], altitude:f.properties.alt * (MOBILE.matches ? 1.5 : 1)}, 1100); wake(3500); setTimeout(()=>{ updateLabels(false); occlude(); }, 1200); }
+  if (fly){ const f = selectedFeat(); if (f) globe.pointOfView({lat:f.properties.c[1], lng:f.properties.c[0], altitude:f.properties.alt * (MOBILE.matches ? 1.5 : 1)}, 1100); wake(3500); }
 }
 function deselect(){ selected = null; document.getElementById('panel').classList.remove('open'); document.body.classList.remove('pan'); sizeGlobe(); refresh(true); }
 document.getElementById('close').onclick = deselect;
