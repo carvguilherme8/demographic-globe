@@ -138,6 +138,14 @@
     #msel{display:block;flex:1;min-width:0;margin:0;padding:9px 34px 9px 11px;font:inherit;font-size:16px;font-weight:600;letter-spacing:.01em;border:0;border-radius:0;background:transparent;color:var(--ink);-webkit-appearance:none;appearance:none;text-overflow:ellipsis;outline:none}
     #mwrap .chev{position:absolute;right:0;top:0;bottom:0;width:30px;border-left:1px solid var(--faint);background:var(--paper2);pointer-events:none}
     #mwrap .chev::after{content:"";position:absolute;left:50%;top:50%;width:6px;height:6px;border-right:1.5px solid var(--ink);border-bottom:1.5px solid var(--ink);transform:translate(-50%,-70%) rotate(45deg)}
+    #msel{text-align:left;cursor:pointer;white-space:nowrap;overflow:hidden}
+    #mpop{display:none;position:absolute;left:-1px;right:-1px;bottom:calc(100% + 7px);max-height:min(66vh,400px);overflow:auto;background:var(--paper2);border:1px solid var(--ink);box-shadow:3px 3px 0 rgba(42,39,34,.28);z-index:20}
+    #mwrap.open #mpop{display:block}
+    #mwrap.open .chev::after{transform:translate(-50%,-30%) rotate(-135deg)}
+    .mo{display:flex;align-items:baseline;gap:11px;width:100%;text-align:left;padding:8px 13px;font:inherit;font-size:16px;color:var(--ink);background:transparent;border:0;border-bottom:1px dotted var(--faint);border-radius:0}
+    .mo:last-child{border-bottom:0}
+    .mo s{text-decoration:none;color:var(--faint);font-size:12px;width:12px;flex:none}
+    .mo.on{font-weight:700;background:rgba(138,31,31,.08);box-shadow:inset 3px 0 0 var(--ox)}
     #mwrap:focus-within{box-shadow:0 0 0 2px rgba(138,31,31,.35),2px 2px 0 rgba(42,39,34,.18)}
     #legendttl{margin-bottom:4px}
     #legendttl b{display:none}
@@ -202,7 +210,7 @@
 </div>
 
 <div id="dock" class="box"><div class="in">
-  <div id="mwrap"><span id="mtag"></span><select id="msel" aria-label="Layer"></select><span class="chev"></span></div>
+  <div id="mwrap"><span id="mtag"></span><button id="msel" type="button" aria-haspopup="listbox"></button><span class="chev"></span><div id="mpop" role="listbox"></div></div>
   <div id="legendttl"><b id="lname"></b><i id="lunit"></i></div>
   <div id="legend"></div>
   <div id="timeline">
@@ -596,10 +604,15 @@ function buildMetrics(){
     const b = document.createElement('button'); b.className = 'mbtn'+(k===metric?' on':'');
     b.innerHTML = `<s>${i+1}</s>${T().m[k]}`; b.onclick = ()=>setMetric(k); box.appendChild(b);
   });
-  const sel = document.getElementById('msel');
+  const cur = document.getElementById('msel'), pop = document.getElementById('mpop'), wrap = document.getElementById('mwrap');
   document.getElementById('mtag').textContent = T().metrics;
-  sel.innerHTML = ORDER.map((k,i)=>`<option value="${k}"${k===metric?' selected':''}>${i+1} · ${T().m[k]}</option>`).join('');
-  sel.onchange = e => setMetric(e.target.value);
+  cur.textContent = `${ORDER.indexOf(metric)+1} · ${T().m[metric]}`;
+  pop.innerHTML = ORDER.map((k,i)=>`<button type="button" class="mo${k===metric?' on':''}" data-k="${k}"><s>${i+1}</s>${T().m[k]}</button>`).join('');
+  pop.onclick = e => { const b = e.target.closest('.mo'); if (b){ wrap.classList.remove('open'); setMetric(b.dataset.k); } };
+  cur.onclick = () => wrap.classList.toggle('open');
+  if (!buildMetrics.bound){ buildMetrics.bound = true;
+    document.addEventListener('pointerdown', e => { if (!wrap.contains(e.target)) wrap.classList.remove('open'); });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') wrap.classList.remove('open'); }); }
 }
 function setMetric(k){
   metric = k; buildMetrics(); buildLegend(); document.getElementById('slider').disabled = !!METRICS[k].static;
