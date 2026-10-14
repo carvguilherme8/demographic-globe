@@ -25,6 +25,8 @@
   #title h1{margin:0;font-size:22px;font-weight:700;letter-spacing:.14em;text-transform:uppercase}
   #title .sub{margin-top:4px;font-size:12.5px;font-style:italic;color:var(--muted)}
   #world{margin-top:9px;padding-top:8px;border-top:1px solid var(--ink);font-size:12px;color:var(--muted);display:flex;align-items:baseline;gap:9px}
+  #world em{font-style:normal}
+  #world .s{display:none}
   #world b{font-size:19px;color:var(--ink);font-weight:700;font-variant-numeric:lining-nums tabular-nums}
 
   /* ---- layers ---- */
@@ -124,7 +126,8 @@
     #title .sub{display:none}
     #world{margin:0;padding:0;border:0;font-size:11px;gap:5px}
     #world b{font-size:14px}
-    #world span{display:none}
+    #world .l{display:none}
+    #world .s{display:inline;white-space:nowrap}
     #metrics,.foot{display:none}
     #tools{left:10px;right:10px;top:calc(54px + env(safe-area-inset-top));gap:5px}
     #search{flex:1;width:auto;min-width:0;font-size:16px;padding:5px 10px}
@@ -243,7 +246,7 @@ const Y0 = 1950, Y1 = 2100, SPLIT = 2024;
 /* ================= i18n ================= */
 const I18N = {
   pt:{title:"Atlas demográfico", sub:"ONU · World Population Prospects 2024 · Team Ipanema", metrics:"Camadas",
-    world:"população mundial (soma dos países)", search:"Buscar país…", spin:"Girar", spinOff:"Parar giro",
+    world:"população mundial (soma dos países)", worldS:"pop. mundial", search:"Buscar país…", spin:"Girar", spinOff:"Parar giro",
     est:"estimativa", proj:"projeção (mediana)", nodata:"sem dados", click:"clique para a ficha do país",
     foot:"Fonte: UN WPP 2024 (Medium + OtherVariants). 1950–2023: estimativas; 2024–2100: projeção. Limites: Natural Earth.",
     kpi:{pop:"População", g:"Crescimento anual", t:"Fecundidade (TFR)", l:"Esperança de vida", a:"Idade mediana", i:"Mortalidade infantil", b:"Natalidade (CBR)", d:"Mortalidade (CDR)"},
@@ -262,7 +265,7 @@ const I18N = {
     pi2100:(a,b,c)=>`Em 2100: mediana <b>${b}</b>, IC 95% de ${a} a ${c}.`,
     chNote:"Faixas: intervalos de predição de 80% (escuro) e 95% (claro). Linha tracejada: ano selecionado."},
   en:{title:"Demographic Atlas", sub:"UN · World Population Prospects 2024 · Team Ipanema", metrics:"Layers",
-    world:"world population (sum of countries)", search:"Search country…", spin:"Spin", spinOff:"Stop spin",
+    world:"world population (sum of countries)", worldS:"world pop.", search:"Search country…", spin:"Spin", spinOff:"Stop spin",
     est:"estimate", proj:"projection (median)", nodata:"no data", click:"click for the country sheet",
     foot:"Source: UN WPP 2024 (Medium + OtherVariants). 1950–2023: estimates; 2024–2100: projection. Boundaries: Natural Earth.",
     kpi:{pop:"Population", g:"Annual growth", t:"Fertility (TFR)", l:"Life expectancy", a:"Median age", i:"Infant mortality", b:"Birth rate (CBR)", d:"Death rate (CDR)"},
@@ -347,12 +350,13 @@ function makeOceanCanvas(W, H){
   for (let lat=-90; lat<=90; lat+=10){ const y=(90-lat)/180*H; line(0,y,W,y, lat===0?2.2:(lat%30===0?2:1.1), lat===0?.55:(lat%30===0?.45:.26)); }
   return c;
 }
-const WEAK = (navigator.hardwareConcurrency || 8) <= 4 || (navigator.deviceMemory || 8) <= 4 || /Android|iPhone|iPad|Mobi/i.test(navigator.userAgent);
+const WEAK = (navigator.hardwareConcurrency || 8) <= 2 || (navigator.deviceMemory || 8) <= 2;   // só aparelhos realmente fracos reduzem a qualidade
+const TOUCH = /Android|iPhone|iPad|Mobi/i.test(navigator.userAgent);
 
 /* ================= globo ================= */
 const el = document.getElementById('globe');
 const ph = document.createElement('canvas'); ph.width = 4; ph.height = 2; ph.getContext('2d').fillStyle = '#d3e0e6'; ph.getContext('2d').fillRect(0,0,4,2);
-const globe = Globe({animateIn:false, rendererConfig:{antialias: !WEAK, alpha:true, powerPreference:'high-performance'}})(el)
+const globe = Globe({animateIn:false, rendererConfig:{antialias: !WEAK && !TOUCH, alpha:true, powerPreference:'high-performance'}})(el)
   .globeImageUrl(ph.toDataURL())
   .backgroundColor('#e8e0cc')
   .showAtmosphere(false)
@@ -363,7 +367,7 @@ const globe = Globe({animateIn:false, rendererConfig:{antialias: !WEAK, alpha:tr
   .polygonAltitude(0.022)
   .polygonsTransitionDuration(150);
 globe.enablePointerInteraction(false);   // sem raycast por país: hover e clique são calculados abaixo (1 raio na esfera + ponto-em-polígono)
-globe.renderer().setPixelRatio(WEAK ? 1 : Math.min(window.devicePixelRatio || 1, 1.5));
+globe.renderer().setPixelRatio(Math.min(window.devicePixelRatio || 1, WEAK ? 1.25 : TOUCH ? 2 : 1.5));
 
 /* ================= terra: todos os países pintados numa única textura ================= */
 const LW = (WEAK || globe.renderer().capabilities.maxTextureSize < 4096) ? 2048 : 4096, LH = LW/2;
@@ -411,7 +415,7 @@ function scheduleLand(){ if (landQ) return; landQ = true; requestAnimationFrame(
     const old = gm.map, t = new old.constructor(landC);
     if ('colorSpace' in old) t.colorSpace = old.colorSpace;
     if ('encoding' in old) t.encoding = old.encoding;
-    t.anisotropy = Math.min(WEAK ? 2 : 8, globe.renderer().capabilities.getMaxAnisotropy());
+    t.anisotropy = Math.min(WEAK ? 2 : TOUCH ? 4 : 8, globe.renderer().capabilities.getMaxAnisotropy());
     gm.map = t; gm.emissive.setHex(0xffffff); gm.emissiveMap = t; gm.emissiveIntensity = 0.4; gm.shininess = 0; gm.needsUpdate = true;
     landTex = t; old.dispose(); redrawLand();
   } else if (n < 80) setTimeout(()=>initLand(n+1), 100);
@@ -638,7 +642,7 @@ document.getElementById('play').onclick = ()=>{
 };
 function updateWorld(){
   let tot = 0; isos.forEach(i=>{ const v = DATA[i].p[year-Y0]; if (v!=null) tot += v; });
-  document.getElementById('world').innerHTML = `<b>${fmtPop(tot)}</b><span>${T().world}</span>`;
+  document.getElementById('world').innerHTML = `<b>${fmtPop(tot)}</b><span><em class="l">${T().world}</em><em class="s">${T().worldS} · ${year}</em></span>`;
 }
 function setSpin(on){ spinning = on; controls.autoRotate = on; wake(); document.getElementById('spin').textContent = on ? T().spinOff : T().spin; }
 document.getElementById('spin').onclick = ()=> setSpin(!spinning);
